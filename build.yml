@@ -1,0 +1,38 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Get source
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r KoVirTireBot_Win10/requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Install Chromium
+        run: python -m playwright install chromium
+
+      - name: Build EXE with bundled Chromium
+        shell: pwsh
+        run: |
+          $browserPath = "$env:LOCALAPPDATA\ms-playwright"
+          pyinstaller --noconfirm --clean --onedir --name KavirTireBot --collect-all playwright --add-data "$browserPath;pw-browsers" KoVirTireBot_Win10/KoVirTireBot.py
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: KavirTireBot-Windows
+          path: dist/KavirTireBot/
+          if-no-files-found: error
