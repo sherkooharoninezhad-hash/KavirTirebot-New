@@ -1,38 +1,60 @@
-name: Build Windows EXE
+name: Build KoVir Tire Bot (Windows)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main, master ]
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     steps:
-      - name: Get source
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install packages
+      - name: Install Python dependencies
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r KoVirTireBot_Win10/requirements.txt
-          python -m pip install pyinstaller
+          python -m pip install -r KoVirTireBot_Win10/requirements.txt pyinstaller
 
-      - name: Install Chromium
-        run: python -m playwright install chromium
+      - name: Install Chromium into Playwright package directory
+        shell: pwsh
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
+        run: |
+          python -m playwright install chromium
+          $browserPath = python -c "import pathlib, playwright; print(pathlib.Path(playwright.__file__).parent / 'driver' / 'package' / '.local-browsers')"
+          if (!(Test-Path $browserPath)) { throw "Playwright browser directory was not created: $browserPath" }
+          "PLAYWRIGHT_BROWSER_PATH=$browserPath" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build EXE with bundled Chromium
         shell: pwsh
         run: |
-          $browserPath = "$env:LOCALAPPDATA\ms-playwright"
-          pyinstaller --noconfirm --clean --onedir --name KavirTireBot --collect-all playwright --add-data "$browserPath;pw-browsers" KoVirTireBot_Win10/KoVirTireBot.py
+          pyinstaller --noconfirm --clean --windowed --onedir `
+            --name KoVirTireBot `
+            --collect-all playwright `
+            --add-data "$env:PLAYWRIGHT_BROWSER_PATH;playwright/driver/package/.local-browsers" `
+            --add-data "KoVirTireBot_Win10/Pic1.jpg;." `
+            KoVirTireBot_Win10/KoVirTireBot.py
+          if (!(Test-Path "dist/KoVirTireBot/_internal/playwright/driver/package/.local-browsers")) {
+            throw "Bundled Chromium directory is missing from the EXE output."
+          }
 
-      - name: Upload build
+      - name: Package portable application
+        shell: pwsh
+        run: |
+          Copy-Item KoVirTireBot_Win10/README_FA.txt dist/KoVirTireBot/README_FA.txt
+          Compress-Archive -Path dist/KoVirTireBot/* -DestinationPath KoVirTireBot_Windows_EXE.zip -Force
+
+      - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KavirTireBot-Windows
-          path: dist/KavirTireBot/
+          name: KoVirTireBot-Windows-EXE
+          path: KoVirTireBot_Windows_EXE.zip
           if-no-files-found: error
