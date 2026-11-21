@@ -23,28 +23,40 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r KoVirTireBot_Win10/requirements.txt pyinstaller
 
-      - name: Install Chromium into Playwright package directory
+      - name: Install Chromium for the bundled Playwright package
         shell: pwsh
         env:
           PLAYWRIGHT_BROWSERS_PATH: '0'
         run: |
           python -m playwright install chromium
           $browserPath = python -c "import pathlib, playwright; print(pathlib.Path(playwright.__file__).parent / 'driver' / 'package' / '.local-browsers')"
-          if (!(Test-Path $browserPath)) { throw "Playwright browser directory was not created: $browserPath" }
+          if (!(Test-Path $browserPath)) {
+            throw "Playwright Chromium folder was not created: $browserPath"
+          }
+          $chrome = Get-ChildItem -Path $browserPath -Recurse -Filter chrome.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (!$chrome) {
+            throw "chrome.exe was not found inside Playwright browser folder: $browserPath"
+          }
           "PLAYWRIGHT_BROWSER_PATH=$browserPath" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build EXE with bundled Chromium
         shell: pwsh
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
         run: |
+          # Pic1.jpg is not referenced by the current Python source.
+          # Do not make the build depend on an optional image being uploaded to GitHub.
           pyinstaller --noconfirm --clean --windowed --onedir `
             --name KoVirTireBot `
             --collect-all playwright `
             --add-data "$env:PLAYWRIGHT_BROWSER_PATH;playwright/driver/package/.local-browsers" `
-            --add-data "KoVirTireBot_Win10/Pic1.jpg;." `
             KoVirTireBot_Win10/KoVirTireBot.py
-          if (!(Test-Path "dist/KoVirTireBot/_internal/playwright/driver/package/.local-browsers")) {
-            throw "Bundled Chromium directory is missing from the EXE output."
+
+          $chromeInOutput = Get-ChildItem -Path "dist/KoVirTireBot" -Recurse -Filter chrome.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (!$chromeInOutput) {
+            throw "Chromium chrome.exe was not bundled into dist/KoVirTireBot."
           }
+          Write-Host "Bundled Chromium found at: $($chromeInOutput.FullName)"
 
       - name: Package portable application
         shell: pwsh
