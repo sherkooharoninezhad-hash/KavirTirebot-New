@@ -179,6 +179,10 @@ class BotApp:
 
     def browser_worker(self):
         try:
+            # In the packaged EXE, use the Chromium copy bundled beside Playwright.
+            # The GitHub build installs Chromium into this package-local location.
+            import os
+            os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
             from playwright.sync_api import sync_playwright
             profile = Path.home() / "KoVirTireBotProfile"
             profile.mkdir(exist_ok=True)
